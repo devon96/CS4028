@@ -1,5 +1,6 @@
 \documentclass{article}
 \usepackage[a4paper, margin=2.5cm]{geometry}
+\usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{graphicx}
 \usepackage{url}
@@ -140,16 +141,56 @@ In Listing 3, I have included a very high overview of the idea behind Meltdown. 
 
 \end{enumerate}
 
-Having explained the absolute basics behind the attack, let's try executing a real-life proof-of-concept showcasing the possibilities. I will be using code produced by Pavel Boldin. For reference, here are the parameters of the computer that I used for the test:
+Having explained the absolute basics behind the attack, let's try executing a real-life proof-of-concept showcasing the possibilities. I will be using code produced by Pavel Boldin\cite{MeltdownPOC}. For reference, here are the parameters of the computer that I used for the test:
 
 \begin{quote}
-\% uname- a 
+\% uname -a 
 \\ $>$ Linux workstation 5.3.5-arch1-1-ARCH \#1 SMP PREEMPT Mon Oct 7 19:03:08 UTC 2019 x86\_64 GNU/Linux 
 \\ \% lscpu | grep name
 \\ $>$ Model name: Intel(R) Core(TM) i5-6500 CPU @ 3.20GHz
 \end{quote}
 
-Additionally, since the vulnerability was already patched, I was able to disable those mitigations, as the option to do so has been available since Linux 5.2. 
+Additionally, since the vulnerability was already patched, I was able to disable those mitigations, as the option to do so has been available since Linux 5.2 - the choice is mostly offered due to the great performance impact of the subsequent patches \cite{low2018overview}. The PoC that I'm about to run is going to access \lstinline{linux_proc_banner} - normally located in privileged, kernel space. Note: for the purposes of the experiment, the code is run with sudo privileges to determine the exact address space, as normally KASLR (Kernel Address Space Layout Randomization) will scramble it upon every reboot - although there have already been successful attempts at breaking that security ``feature`` as well \cite{jang2016breaking} - normally, even knowing the exact memory location, action shouldn't be allowed. 
+
+\pagebreak
+
+\begin{lstlisting}[caption=Meltdown in action, frame=tlrb, breaklines=true]{Name}
+% sudo ./run.sh          
+read ffffffffbbc00140 = 25 % (score=963/1000)
+read ffffffffbbc00141 = 73 s (score=983/1000)
+read ffffffffbbc00142 = 20   (score=983/1000)
+read ffffffffbbc00143 = 76 v (score=993/1000)
+read ffffffffbbc00144 = 65 e (score=60/1000)
+read ffffffffbbc00145 = 72 r (score=997/1000)
+read ffffffffbbc00146 = 73 s (score=986/1000)
+read ffffffffbbc00147 = 69 i (score=971/1000)
+read ffffffffbbc00148 = 6f o (score=648/1000)
+read ffffffffbbc00149 = 6e n (score=42/1000)
+read ffffffffbbc0014a = 20   (score=992/1000)
+read ffffffffbbc0014b = 25 % (score=969/1000)
+read ffffffffbbc0014c = 73 s (score=995/1000)
+read ffffffffbbc0014d = 20   (score=986/1000)
+read ffffffffbbc0014e = 28 ( (score=991/1000)
+read ffffffffbbc0014f = 62 b (score=977/1000)
+\end{lstlisting}
+
+
+\begin{lstlisting}[caption=init/version.c from Linux kernel source code, frame=tlrb, breaklines=true]{Name}
+const char linux_proc_banner[] =
+	"%s version %s"
+	" (" LINUX_COMPILE_BY "@" LINUX_COMPILE_HOST ")"
+	" (" LINUX_COMPILER ") %s\n";
+\end{lstlisting}
+
+Upon completion, a dump of the banner is displayed in stdout. For comparison, Listing 5 includes snippet from Linux's source code \cite{linuxsrc} showing the exact value of the banner. 
+
+\paragraph{Spectre}
+Variant 1 \& 2 are abusing the same optimizers as Meltdown (Variant 3), that is, similar technique is used - measuring how quick the read times are to calculate whether we're hitting CPU cache or not. The two and the scariest difference would be:
+
+\begin{itemize}
+  \item As opposed to Meltdown, Spectre is capable of crossing the process boundaries and access memory of other software currently running on the system. Think, for example, malicious software running inside a Virtual Machine capable of accessing memory in the host OS. Or to refer to the previous situation with cloud providers - potentially attacker could access other VMs running on the same cluster / machine.
+  \item And finally, whereas Meltdown was found out to be susceptible only on Intel's architecture, Spectre has been successfully reproduced in all major architectures from AMD, Intel, ARM and more. 
+\end{itemize}
 
 \section{Mitigation}
 Mitigation
@@ -157,7 +198,7 @@ Mitigation
 \section{Impact}
 Impact
 
-\bibliographystyle{unsrt}
+\bibliographystyle{abbrv}
 \bibliography{assessment}
  
 \end{document}
