@@ -102,7 +102,7 @@ As per Figure 2, the execution would be halted at the first step, in order to re
  
 Having covered the background behind the attack and feature it exploits, we can finally progress to the description itself. As mentioned at the beginning of the paper, it is necessary to distinct between Meltdown and Spectre, as ultimately they reach a different goal. Together, they are part of "branch target injection" class of vulnerabilities. The most impressive and scariest part is that in no way it exploits any of the software flaws, nor it is easy or even possible to patch it. Official recommendation by Intel is to completely replace the hardware with newer revisions with revised architecture no longer susceptible to those kind of attacks.
 
-I'd like to present two different examples, as described in the original papers\cite{kocher2018spectre}\cite{lipp2018meltdown} released by Google's Project Zero. First would be a simple C program with the capability of reading privileged data, which otherwise would not be accessible and any attempts would result in either segmentation or page faults.
+I'd like to present two different examples, as described in the original papers \cite{kocher2018spectre}\cite{lipp2018meltdown} released by Google's Project Zero. First would be a simple C program with the capability of reading privileged data, which otherwise would not be accessible and any attempts would result in either segmentation or page faults.
 The other - an attack on JavaScript interpreter on a browser with site-isolation disabled (Spectre mitigation). Which in theory means, that simply loading malicious website and executing the code would be enough to leak sensitive information from the computer. 
 
 
@@ -229,7 +229,7 @@ end of leak
 \end{lstlisting}
 
 \section{Mitigation, Impact and Evaluation}
-Quite possibly the most disturbing fact is that the only real and most efficient fix reported by Intel is replacing the hardware. There's been numerous attempts in patching the microcode, but ultimately the problem lies within the architecture of the chips themselves. Nevertheless, Dell holds that ``No "real-world" exploits of these vulnerabilities have been reported to date, though researchers have produced proof-of-concepts.``\cite{dell}. Since there is a level of prediction attached to those attacks, they aren't particularly fast, with data transfers of at most 500kb/s - this can still be major, considering that potentially the vitalisation concepts as we know would no longer hold.
+Quite possibly the most disturbing fact is that the only real and most efficient fix reported by Intel is replacing the hardware. There's been numerous attempts in patching the microcode, but ultimately the problem lies within the architecture of the chips themselves. Nevertheless, Dell holds that ``No "real-world" exploits of these vulnerabilities have been reported to date, though researchers have produced proof-of-concepts.``\cite{dell}. Since there is a level of prediction attached to those attacks, they aren't particularly fast, with data transfers of at most 10kb/s for Spectre and 503kb/s for Meltdown \cite{kocher2018spectre}\cite{lipp2018meltdown} - this can still be major, considering that potentially the virtualization concepts as we know would no longer hold.
 
 Ever since the initial release in January 2018, there's been numerous fixes attempting to patch the hole. Two major mitigations have been released to counteract:
 \begin{itemize}
