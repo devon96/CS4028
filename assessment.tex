@@ -96,7 +96,7 @@ Let's also assume that Y and Z are already present in the CPU cache, but X will 
   \caption{OOE optimization}
 \end{figure}
 
-As per Figure 2, the execution would be halted at the first step, in order to retrieve the X from RAM, with the entire program taking 7 cycles. On the other hand, OOE optimizer would recognize the blocker and execute step 2, 4 BEFORE even reaching that point. That way, the entire operation can be closed only in 5 cycles, thus improving the execution speed by 25\%. As mentioned before, in reality RAM access is much slower, so that difference ends up being much more significant.
+As per Figure 2, the execution would be halted at the first step, in order to retrieve the X from RAM, with the entire program taking 7 cycles. On the other hand, OOE optimizer would recognize the blocker and execute step 2 \& 4 \textbf{before} even reaching that point. That way, the entire operation can be closed only in 5 cycles, thus improving the execution speed by 25\%. As mentioned before, in reality RAM access is much slower, so that difference ends up being much more significant.
 
 \section{Meltdown \& Spectre}
  
@@ -107,9 +107,9 @@ The other - an attack on JavaScript interpreter on a browser with site-isolation
 
 
 \paragraph{Meltdown}
-Let's first though clear the disambiguation between the two. As we might know, the kernel is utilizing its own page table, which should never be accessible by the user. This might hold information such as passwords, keyrings or other privileged information - important for running of the system (e.g. TLS connections). This would only be available when context switch happens into kernel model.
+Let's first though clear the disambiguation between the two. As we might know, the kernel is utilizing its own page table, which should never be accessible by the user. This holds information such as passwords, keyrings or other privileged information - important for running of the system (e.g. TLS connections). This would only be available when context switch happens into the kernel mode.
 
-To increase the performance, modern CPU manufacturers map the kernel page-table space to every running process. This speeds up context switching and limits page faults. Of course, the address space is scrambled and protected by privileged bit meaning any access attempts will result in denials - and that's where speculative execution comes in action. Combination of Branch Prediction and Out of Order Execution gives the attacker the power to run any code at will with reasonable throughput.
+To increase the performance, modern CPU manufacturers map the kernel page-table space to every running process. This speeds up context switching and limits page faults. Of course, the address space is scrambled and protected by privileged bit meaning any access attempts will result in denials - and that's where speculative execution comes in action. Combination of Branch Prediction and Out of Order Execution gives the attacker the power to retrieve arbitrary data given memory location with reasonable throughput.
 
 % \pagebreak
 \begin{lstlisting}[caption=Meltdown PoC,frame=tlrb, numbers=left, firstnumber=1]{Name}
@@ -130,8 +130,8 @@ In Listing 3, I have included a very high overview of the idea behind Meltdown. 
   \item [1] Let's start with initiating our testArray - that's the entity that we're going to use to detect privileged information. We're planning to store 256 elements in it - and since L-cache is usually divided into rows 64-bits each, we multiply it by that number. 
   \item [2] We want to evict all current information residing in L-cache. This step highly depends on architecture and used compiler, usually it is achieved by writing large quantities of junk directly to the CPU.
   \item [3] Normally, we'd be looking to wrap line 3 and 4 in a try-catch block, as in 3rd line, we'd be attempting to access privileged information, causing segfault - so execution of the program would be dropped and all results discarded.
-  \item [4] Assuming the information from previous step, the CPU tries to optimize the execution and \textbf{predicts} that line 5 won't segfault, thus running the operation and saving the results in L-cache. But, once the clock actually reaches the forbidden operation, the results are discarded and rolled back, showing the fault. Though the results are still in cache...
-  \item [5-9] This is the crucial and last step in the whole operation. We're simply iterating over all elements of our testArray and measuring the access time. is\_cached()'s job would be to tell us how long it takes to retrieve given bit from the array. As retrieval from L-cache is significantly faster, we can make an assumption that the operation was indeed speculatively executed and the secret bit was leaked... Repeat for the remaining of the array.
+  \item [4] Assuming the information from previous step, the CPU tries to optimize the execution and \textbf{predicts} that line 5 won't segfault, thus reordering the execution flow, running the operation early and saving the results in L-cache. But, once the clock actually reaches the forbidden operation, the results are discarded and rolled back, showing the fault. Though the results are still in cache...
+  \item [5-9] This is the crucial and last step in the whole operation. We're simply iterating over all elements of our testArray and measuring the access time. is\_cached()'s job would be to tell us how long it takes to retrieve given bit from the array. As retrieval from L-cache is significantly faster, we can make an assumption that the operation was indeed speculatively executed and the secret bit was leaked... Repeat for the rest of the array.
 
 \end{enumerate}
 
@@ -146,7 +146,6 @@ Having explained the absolute basics behind the attack, let's try executing a re
 
 Additionally, since the vulnerability was already patched, I was able to disable those mitigations, as the option to do so has been available since Linux 5.2 - the choice is mostly offered due to the great performance impact of the subsequent patches \cite{low2018overview}. The PoC that I'm about to run is going to access \lstinline{linux_proc_banner} - normally located in privileged, kernel space. Note: for the purposes of the experiment, the code is run with sudo privileges to determine the exact address space, as normally KASLR (Kernel Address Space Layout Randomization) will scramble it upon every reboot - although there have already been successful attempts at breaking that security ``feature`` as well \cite{jang2016breaking} - normally, even knowing the exact memory location, access shouldn't be allowed. 
 
-\pagebreak
 
 \begin{lstlisting}[caption=Meltdown in action, frame=tlrb, breaklines=true]{Name}
 % sudo ./run.sh          
@@ -186,7 +185,7 @@ Variant 1 \& 2 are abusing the same optimizers as Meltdown (Variant 3), that is,
   \item And finally, whereas Meltdown was found out to be susceptible only on Intel's architecture, Spectre has been successfully reproduced in all major architectures from AMD, Intel, ARM and more. 
 \end{itemize}
 
-\begin{lstlisting}[caption=Spectre PoC,frame=tlrb, numbers=left, firstnumber=1]{Name}
+\begin{lstlisting}[caption=Spectre PoC,frame=tlrb, numbers=left, firstnumber=1, float]{Name}
 char testArray[256 * 64];
 char dummyArray[1024];
 // Train Branch Predictor
@@ -209,7 +208,8 @@ for(int i=0; i<256; i++) {
 As you can see in Listing 6, we will be abusing branch prediction optimization by first trying to train it for several iterations, such that Branch Target Buffer is going to preemptively execute the following operations with the ultimate aim of speeding up the execution. That's where we're going to introduce an illegal operation in Line 10-12 - assuming out\_of\_bounds is a variable that greatly goes beyond the initiated size, so the condition would never be passed. But, since Branch Predictor THINKS it's going to be fine (before even reaching that point), it'll attempt to read the forbidden piece of memory and put it in L-cache. The rest is identical to Meltdown attack, that is, we again measure how long it takes us to access elements in our test array to determine whether it's present in cache.
 
 
-Again, to showcase a real-life scenario, I'll utilize PoC running inside a Chromium browser. JavaScript normally gets executed in a sandboxed environment, with no way of crossing boundaries. What is more, high-precision timing (capable of telling a difference between L-cache or RAM access times) shouldn't be possible from within a web browser - sadly, we were proven wrong once again, as utilizing HTML5 Web Workers lets us achieve precision sufficient enough. 
+Again, to showcase a real-life scenario, I'll utilize PoC running inside a (outdated, unpatched) Chromium browser. JavaScript normally gets executed in a sandboxed environment, with no way of crossing boundaries. What is more, high-precision timing (capable of telling a difference between L-cache or RAM access times) shouldn't be possible from within a web browser - sadly, we were proven wrong once again, as utilizing HTML5 Web Workers lets us achieve precision sufficient enough. 
+
 \begin{lstlisting}[caption=Javascript leaking memory\cite{spectrechrome},frame=tlrb]{Name}
 Chromium Version 62.0.3202.0 (Developer Build) (64-bit)
 
@@ -228,7 +228,7 @@ leak off=0x2200009, byte=0x64 'd'
 leak off=0x220000a, byte=0x6e 'n'
 end of leak
 \end{lstlisting}
-The code above is able to extract the value of the char array that was defined in the JavaScript file (as ASCII values) - without effectively reading the array at all. Then, it measures the access time (after training the branch predictor), reasulting in leak, printing out my text onto the screen. In this particular case, it's a pre-defined variable with a known location in memory. But, it might as well be your WiFi password or even last keystrokes, which could contain sensitive data. 
+The listing above shows the results of capability to extract the value of the char array that was defined in the JavaScript file (as ASCII values) - without effectively reading the array at all, relying only on memory addresses. Then, it measures the access time (after training the branch predictor), reasulting in leak, printing out my text onto the screen. In this particular case, it's a pre-defined variable with a known location in memory. But, it might as well be your WiFi password or even last keystrokes, which could contain sensitive data. 
 
 \section{Mitigation, Impact and Evaluation}
 As mentioned at the beginning, the official and true fix remains a necessity to replace the chips with architecture that was altered having outlined problems in mind. There's been numerous attempts in patching the microcode, but ultimately the problem lies within the architecture of the chips themselves. Nevertheless, Dell claims that ``No "real-world" exploits of these vulnerabilities have been reported to date, though researchers have produced proof-of-concepts.``\cite{dell}. Since there is a level of prediction attached to those attacks, they aren't particularly fast, with data transfers of at most 10kb/s for Spectre and 503kb/s for Meltdown \cite{kocher2018spectre}\cite{lipp2018meltdown} - this can still be major, considering that potentially the virtualization concepts as we know would no longer hold.
@@ -239,7 +239,7 @@ Ever since the initial release in January 2018, there's been numerous fixes atte
   \item Retpoline - Retroactive Trampoline \cite{turner2018retpoline}, in short, it's a mitigation preventing the speculation. Whenever the CPU is attempting to execute a branch preemptively, the trampoline will launch it into infinite loop, preventing it from executing potentially sensitive piece of code.
 \end{itemize}
 
-I believe it is also fair to say that discovery of this whole has been rather beneficial when it comes to moving forward chip architecture. It has also called out corporations trying to cheaply increase the performance, sacrificing security at the same time. It's important to never sacrifice security (especially considering this scenario and the amount of affected hardware) just to gain an advantage over competitor. Having said that though, the impact of patches on all machines has been colossal - at worst, the performance hit was even at 50\% \cite{prout2018measuring} and the recommended solution of replacing the hardware is just not good enough. It's really concerning that the authors of the original paper compare the results to the opening a Pandora's Box, as entire new technique has been spawned, with more methods being discovered almost every week, some examples: Spoiler, Spectre-NG, NetCAT and possibly even more coming...
+I believe it is also fair to say that discovery of Side-Channel Attacks pioneered by Spectre \& Meltdown has been tremendously detrimental when it comes to moving forward chip architecture. Questionable practices were uncovered, effectively nullifying performance gains in the past decade. It has also called out corporations trying to cheaply increase the speed, sacrificing security at the same time. In my opinion, it is important to never sacrifice security (especially considering this scenario and the amount of affected hardware) just to gain an advantage over competitor. Having said that though, the impact of patches on all machines has been colossal - at worst, the performance hit was even at 50\% \cite{prout2018measuring} and the recommended solution of replacing the hardware is just not good enough. It's really concerning that the authors of the original paper compare the results to the opening a Pandora's Box, as entire new technique has been spawned, with more methods being discovered almost every week, with some examples being: Spoiler, Spectre-NG, NetCAT and possibly even more coming...
 
 I'll close it with a final statement issued by one of the researchers: ``As [Spectre] is not easy to fix, it will haunt us for quite some time.``. 
 
